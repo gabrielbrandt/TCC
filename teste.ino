@@ -28,8 +28,6 @@
 BLECharacteristic *pCharacteristic;
 bool deviceConnected = false;
 float txValue = 0;
-//const int readPin = 32; // Use GPIO number. See ESP32 board pinouts
-//const int LED = 2; // Could be different depending on the dev board. I used the DOIT ESP32 dev board.
 
 //std::string rxValue; // Could also make this a global var to access it in loop()
 
@@ -39,16 +37,18 @@ float txValue = 0;
 #define SERVICE_UUID           "6E400001-B5A3-F393-E0A9-E50E24DCCA9E" // UART service UUID
 #define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 #define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
-int numberOfSamples = 4000;
+
+
+int numberOfSamples = 2000;
 double ICAL = 1.08;
  
-//Set Voltage and current input pins
+// Pino do ESP32 - Pin 0 ADC
 int inPinI1 = 36;
  
 // CT: Voltage depends on current, burden resistor, and turns
-#define CT_BURDEN_RESISTOR    62
-#define CT_TURNS              1800
-#define VOLTAGE               220
+#define CT_BURDEN_RESISTOR    62   // resistência interna do sensor
+#define CT_TURNS              1800 //enrolamentos do sensor, bobina enrolada 1800 vezes
+#define VOLTAGE               220  // saida da rede elétrica
  
 // Initial gueses for ratios, modified by VCAL/ICAL tweaks
 double I_RATIO = (long double)CT_TURNS / CT_BURDEN_RESISTOR * 3.3 / 4096 * ICAL;
@@ -82,19 +82,7 @@ class MyCallbacks: public BLECharacteristicCallbacks {
         for (int i = 0; i < rxValue.length(); i++) {
           Serial.print(rxValue[i]);
         }
-
         Serial.println();
-
-        // Do stuff based on the command received from the app
-       // if (rxValue.find("A") != -1) { 
-      //    Serial.print("Turning ON!");
-      //    digitalWrite(LED, HIGH);
-      //  }
-      //  else if (rxValue.find("B") != -1) {
-     //     Serial.print("Turning OFF!");
-     //     digitalWrite(LED, LOW);
-     //   }
-
         Serial.println();
         Serial.println("*********");
       }
@@ -104,10 +92,8 @@ class MyCallbacks: public BLECharacteristicCallbacks {
 void setup() {
   Serial.begin(115200);
 
-  //pinMode(LED, OUTPUT);
-
   // Create the BLE Device
-  BLEDevice::init("ESP32 UART Test"); // Give it a name
+  BLEDevice::init("MONITORAMENTO DE CONSUMO"); // Give it a name
 
   // Create the BLE Server
   BLEServer *pServer = BLEDevice::createServer();
@@ -134,25 +120,22 @@ void setup() {
   // Start the service
   pService->start();
 
-  // Start advertising
+  // Start advertising e espera o Client conectar para transmitir
   pServer->getAdvertising()->start();
+ 
   Serial.println("Waiting a client connection to notify...");
 }
 
 void loop() {
   if (deviceConnected) {
-    // Fabricate some arbitrary junk for now...
-    //txValue = analogRead(readPin) / 3.456; // This could be an actual sensor reading!
   timer = millis();
-//**************************************************************************
-//Phase1 
   for (int n=0; n<numberOfSamples; n++)
 {
  
    //Used for offset removal
    lastSampleI=sampleI;
  
-   //Read in voltage and current samples.   
+   //Lê a corrente com analogRead   
    sampleI = analogRead(inPinI1);
  
    //Used for offset removal
@@ -174,34 +157,23 @@ void loop() {
   Irms1 = (I_RATIO * sqrt(sumI / numberOfSamples)) - 0.06;
   if (Irms1 < 0){ Irms1 = 0; }; //Set negative Current to zero
   sumI = 0;
- 
-//Serial.println(""+String(Irms1));
 
     // Let's convert the value to a char array:
-    char txString[8]; // make sure this is big enuffz
-    dtostrf(Irms1, 1, 2, txString); // float_val, min_width, digits_after_decimal, char_buffer
+    char txString[8]; // Tamanho do Array Char de 8 Bits
+    dtostrf(Irms1, 1, 2, txString); // float_val, min_width, digits_after_decimal, char_buffer - Função que transforma um Float em Char
     
 //    pCharacteristic->setValue(&txValue, 1); // To send the integer value
 //    pCharacteristic->setValue("Hello!"); // Sending a test message
-    pCharacteristic->setValue(txString);
+    pCharacteristic->setValue(txString); //Pega o valor para enviar
     
     pCharacteristic->notify(); // Send the value to the app!
     Serial.print("*** Sent Value: ");
     Serial.print(txString);
     Serial.println(" ***");
+    Serial.print("*** Tempo Percorrido ");
+    Serial.print(timer);
+    Serial.println(" ***");
 
-    // You can add the rxValue checks down here instead
-    // if you set "rxValue" as a global var at the top!
-    // Note you will have to delete "std::string" declaration
-    // of "rxValue" in the callback function.
-//    if (rxValue.find("A") != -1) { 
-//      Serial.println("Turning ON!");
-//      digitalWrite(LED, HIGH);
-//    }
-//    else if (rxValue.find("B") != -1) {
-//      Serial.println("Turning OFF!");
-//      digitalWrite(LED, LOW);
-//    }
   }
-  delay(1000);
+  delay(1);
 }
